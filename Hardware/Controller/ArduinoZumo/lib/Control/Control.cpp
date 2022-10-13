@@ -1,5 +1,5 @@
 //
-// Created by Alex Curtis on 4/14/22.
+// Created by Alex Curtis on 10/12/22.
 //
 
 #include "Control.h"
@@ -7,11 +7,6 @@
 #include "Zumo32U4Encoders.h"
 #include "Zumo32U4Motors.h"
 #define ENCODER_OPTIMIZE_INTERRUPTS
-
-#define ENC_R_WHITE 2                                   //!< Right motor encoder output B (white wire)
-#define ENC_R_YELLOW 5                                  //!< Right motor encoder output A (yellow wire)
-#define ENC_L_WHITE 3                                   //!< Left motor encoder output B (white wire)
-#define ENC_L_YELLOW 6                                  //!< Left motor encoder output A (yellow wire)
 
 const Pair<float> MIN_SPEED = {81.879180,80.635212};    //!< Minimum scaled PWM //TODO implement this
 // Pairs
@@ -22,19 +17,13 @@ Zumo32U4Motors motors;        //!< Motor 2 is the right wheel
 Zumo32U4Encoders encoders;    //!< Encoders for left and right wheels
 
 Control::Control(){
-	// Initialize the motor object
-//	motors.init();
+
 }
 
 bool Control::drive(float targetPhi, float targetRho) {
 
 	// Setup once
 	startControl();
-
-	// Update encoder counts
-//	counts = {encoders.getCountsLeft(), -encoders.getCountsRight()};
-//	currentAngle = (RADIUS * RAD_CONVERSION * float(counts.L - counts.R)) / BASE;
-//	currentDistance = RADIUS * RAD_CONVERSION * float(counts.L + counts.R) * float(0.5); // Circumference = 2*PI*r
 
 	// Find current robot positions
 	getPositions();
@@ -45,23 +34,23 @@ bool Control::drive(float targetPhi, float targetRho) {
 		// Adjust elapsed time
 		currentTime += CONTROL_SAMPLE_RATE;
 
-		// Calculate ∆Va
+		// Calculate ∆Va (rotational motor output)
 		motorDif = controlAngle(currentAngle, targetPhi * float(PI) / float(180));
 
 		// only start moving forward when "done" turning
 		if(abs(motorDif) < 20) {
 
-			if(firstRho) { // to mitigate the initial encoder readings from turning
+			if(firstRho) { // To mitigate the initial encoder readings from turning
 
 				rhoOffset = RADIUS*RAD_CONVERSION*float(counts.L + counts.R)*float(0.5);
 				firstRho = false;
 			}
 
-			// Calculate Va
+			// Calculate Va (forward motor output)
 			motorSum = controlForward(currentDistance - rhoOffset, targetRho);
 		}
 	}
-	// Determine target motor speeds based on motorDif and motorSum using setMotorValues()
+	// Determine target motor speeds based on motorDif and motorSum using setMotors()
 	setMotors(motorDif,motorSum);
 
 	// Set the motors to the new speeds
@@ -95,7 +84,7 @@ void Control::startControl() {
 	currentTime = millis();
 	startTime = millis();
 
-	// Set left and right motor speeds to 0
+	// Stop the motors
 	motors.setSpeeds(0, 0);
 
 }
