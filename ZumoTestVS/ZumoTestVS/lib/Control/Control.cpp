@@ -51,6 +51,24 @@ bool Control::drive(float targetPhi, float targetRho) {
 		}
 	}
 	// Determine target motor speeds based on motorDif and motorSum using setMotors()
+	Serial.print("Dif: ");
+	Serial.print(motorDif);
+	Serial.print("\t");
+	Serial.print("Sum: ");
+	Serial.print(motorSum);
+	Serial.print("\t");
+	Serial.print("L: ");
+	Serial.print(counts.L);
+	Serial.print("\t");
+	Serial.print("R: ");
+	Serial.print(counts.R);
+	Serial.print("\t");
+	Serial.print("Angle: ");
+	Serial.print(currentAngle * 180 / PI);
+	Serial.print("\t");
+	Serial.print("Distance: ");
+	Serial.println(currentDistance);
+
 	setMotors(motorDif, motorSum);
 
 	// Set the motors to the new speeds
@@ -109,7 +127,7 @@ void Control::stopControl() {
  */
 void Control::getPositions() {
 	// Update encoder counts
-	counts = {encoders.getCountsLeft(), -encoders.getCountsRight()};
+	counts = {encoders.getCountsLeft(), encoders.getCountsRight()};
 
 	// Find current robot positions
 	currentAngle = (RADIUS * RAD_CONVERSION * float(counts.L - counts.R)) / BASE;
@@ -145,17 +163,17 @@ float Control::controlForward(float current, float desired) {
 	if(output < -400) output = -400;
 
 	// Make sure the output is large enough for the motors to turn
-	if(error > 0.5 && output < 80) output = 80;
-	if(error < -0.5 && output > -80) output = -80;
+	// if(error > 0.5 && output < 60) output = 60;
+	// else if(error < -0.5 && output > -60) output = -60;
 
 	// Print current values for testing
-	Serial.print("\trho: "); Serial.print(current,5);
-	Serial.print("\ttargetRho: "); Serial.print(desired);
-	Serial.print("\terror: "); Serial.print(error,5);
-	Serial.print("\tP: "); Serial.print(P);
-	Serial.print("\tI: "); Serial.print(I_phi);
-	Serial.print("\tD: "); Serial.print(D);
-	Serial.print("\tSum: "); Serial.println(output);
+	// Serial.print("\trho: "); Serial.print(current,5);
+	// Serial.print("\ttargetRho: "); Serial.print(desired);
+	// Serial.print("\terror: "); Serial.print(error,5);
+	// Serial.print("\tP: "); Serial.print(P);
+	// Serial.print("\tI: "); Serial.print(I_phi);
+	// Serial.print("\tD: "); Serial.print(D);
+	// Serial.print("\tSum: "); Serial.println(output);
 	return output;
 }
 
@@ -178,19 +196,19 @@ float Control::controlAngle(float current, float desired) {
 	output = P + I_phi + D;
 	// Make sure the output is within [0, 400]
 	if(output > 400) output = 400;
-	if(output < -400) output = -400;
+	else if(output < -400) output = -400;
 
-	// if(error > 0.1 && output < 80) output = 80;
-	// if(error < -0.1 && output > -80) output = -80;
+	// if(error > 0.1 && output < 60) output = 60;
+	// else if(error < -0.1 && output > -60) output = -60;
 
 	// Print current values for testing
-	Serial.print("currentAngle: "); Serial.print(current*180/PI,5);
-	Serial.print("\ttargetPhi: "); Serial.print(desired*180/PI);
-	Serial.print("\terror: "); Serial.print(error,5);
-	//Serial.print("\tP: "); Serial.print(P);
-	//Serial.print("\tI: "); Serial.print(I_phi);
-	//Serial.print("\tD: "); Serial.print(D);
-	Serial.print("\tnewDif: "); Serial.println(output);
+	// Serial.print("currentAngle: "); Serial.print(current*180/PI,5);
+	// Serial.print("\ttargetPhi: "); Serial.print(desired*180/PI);
+	// Serial.print("\terror: "); Serial.print(error,5);
+	// //Serial.print("\tP: "); Serial.print(P);
+	// //Serial.print("\tI: "); Serial.print(I_phi);
+	// //Serial.print("\tD: "); Serial.print(D);
+	// Serial.print("\tnewDif: "); Serial.println(output);
 
 	return output;
 }
