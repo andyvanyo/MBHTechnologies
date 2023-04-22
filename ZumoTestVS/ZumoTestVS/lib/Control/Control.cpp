@@ -4,17 +4,13 @@
 
 #include "Control.h"
 #include "Arduino.h"
-#include "Zumo32U4Encoders.h"
-#include "Zumo32U4Motors.h"
-#define ENCODER_OPTIMIZE_INTERRUPTS
 
-const Pair<float> MIN_SPEED = {81.879180,80.635212};    //!< Minimum scaled PWM //TODO implement this
-// Pairs
+#define ENCODER_OPTIMIZE_INTERRUPTS
 Pair<int> targetSpeed;              //!< Scaled PWM values given to motors.setSpeeds() each ranging from -400 to 400
 Pair<long> counts, pastCounts;      //!< Left and right encoder readings (counts)
-
 Zumo32U4Motors motors;        //!< Motor 2 is the right wheel
 Zumo32U4Encoders encoders;    //!< Encoders for left and right wheels
+
 
 Control::Control() {
 
@@ -40,6 +36,7 @@ bool Control::drive(float targetPhi, float targetRho) {
 		// only start moving forward when "done" turning
 		if(abs(motorDif) < 20) {
 
+			//
 			if(firstRho) { // To mitigate the initial encoder readings from turning
 
 				rhoOffset = RADIUS*RAD_CONVERSION*float(counts.L + counts.R)*float(0.5);
@@ -51,12 +48,12 @@ bool Control::drive(float targetPhi, float targetRho) {
 		}
 	}
 	// Determine target motor speeds based on motorDif and motorSum using setMotors()
-	Serial.print("Dif: ");
-	Serial.print(motorDif);
-	Serial.print("\t");
-	Serial.print("Sum: ");
-	Serial.print(motorSum);
-	Serial.print("\t");
+	// Serial.print("Dif: ");
+	// Serial.print(motorDif);
+	// Serial.print("\t");
+	// Serial.print("Sum: ");
+	// Serial.print(motorSum);
+	// Serial.print("\t");
 	Serial.print("L: ");
 	Serial.print(counts.L);
 	Serial.print("\t");
@@ -69,10 +66,14 @@ bool Control::drive(float targetPhi, float targetRho) {
 	Serial.print("Distance: ");
 	Serial.println(currentDistance);
 
-	setMotors(motorDif, motorSum);
+	// print the error 
+	// Serial.print("Error: ");
+	// Serial.println(error);
+	
 
+	setMotors(motorDif, motorSum);
+	//targetSpeed = {0,0}; //TODO remove this
 	// Set the motors to the new speeds
-//	motors.setSpeeds(0, 0);
 	motors.setSpeeds(targetSpeed.L, targetSpeed.R);
 
 	if(isDone()) {
@@ -146,7 +147,14 @@ float Control::controlForward(float current, float desired) {
 	P = KP_RHO * error;
 
 	// Calculate I component
-	I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+	if(error > 1 || error < -1) {
+		I_rho = 0;
+	} else {
+		I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+
+	}
+
+	// I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
 
 	// Calculate D component
 	if (currentTime > 0) {
@@ -185,7 +193,12 @@ float Control::controlAngle(float current, float desired) {
 	// Calculate P component
 	P = KP_PHI * error;
 	// Calculate I component
-	I_phi += KI_PHI * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+	if(error > 30*(PI/180) || error < -30*(PI/180)) {
+		I_phi = 0;
+	} else {
+		I_phi += KI_PHI * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+	}
+
 	// Calculate D component
 	if (currentTime > 0) {
 		D = (error - pastErrorPhi) / float(CONTROL_SAMPLE_RATE / 1000.0);

@@ -54,7 +54,7 @@ float aAngle = 0;
 // the best target angle will depend on which version of the Zumo 32U4 you have.
 // We suggest starting with a value of 4.0 for the OLED version or 2.0 for the
 // LCD version.
-const float targetAngle = 4.0;
+const float targetAngle = 1.0;
 
 void setup()
 {
