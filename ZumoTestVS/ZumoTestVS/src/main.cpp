@@ -3,24 +3,63 @@
 #include "Wire.h"
 #include <Zumo32U4.h>
 
-int newRho = 24, newPhi = 90;
+int newRho = 0, newPhi = 0;
+int sum = 0;
+int diff = 0;
 bool done = false;
 
+void readChar();
+void startExperiment();
+char receivedChar;
+bool newData = false;
+
 Control control;
+Zumo32U4Motors Motors;
+
+//!< Reads a byte sent over serial from Matlab
+void readChar() {
+	if (Serial.available() > 0) {
+		receivedChar = Serial.read();
+		newData = true;
+	}
+}
+
+void startExperiment() {
+	if(newData) {
+		if(receivedChar == 'f'){
+			newRho = 12;
+			newPhi = 0;
+		} else if(receivedChar == 'b') {
+			newRho = -12;
+			newPhi = 0;
+		} else if(receivedChar == 'l') {
+			newPhi = -90;
+			newRho = 0;
+		} else if(receivedChar == 'r') {
+			newPhi = 90;
+			newRho = 0;
+		}
+		else if(receivedChar == 's') {
+			newPhi = 0;	
+			newRho = 0;
+		}
+		newData = false;
+		Serial.println("Received");
+	}
+}
 
 void setup() {
 	// Begin serial communication
 	Serial.begin(9600);
+	while(!Serial); // Wait for serial connection
+	Serial.println("<Zumo is ready>");
+	Motors.setSpeeds(0, 0);
 }
 
 void loop() {
+	readChar();
+	startExperiment();
 	
-	done = control.drive(newPhi, newRho);
-	if(done) {
-		Serial.println("Done");
-		newPhi += 90;
-		done = false;
-	}
 }
 
 

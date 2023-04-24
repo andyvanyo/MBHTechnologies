@@ -26,18 +26,14 @@ float turnAngle = 0;
 	// between readings of the gyro.
 	uint16_t gyroLastUpdate = 0;
 
-Control::Control() {
+VelocityControl::VelocityControl() {
 
 }
 
-bool Control::drive(float targetPhi, float targetRho) {
-
-	// Setup once
-	startControl();
+void VelocityControl::drive(float targetPhi, float targetRho) {
 
 	// Find current robot positions
 	getPositions();
-	
 	sensorUpdate();
 
 	// Update motorDif and motorSum with control() every CONTROL_SAMPLE_RATE ms
@@ -46,79 +42,25 @@ bool Control::drive(float targetPhi, float targetRho) {
 		// Adjust elapsed time
 		currentTime += CONTROL_SAMPLE_RATE;
 
-		// Calculate ∆Va (rotational motor output)
-		motorDif = controlAngle(-turnAngle * PI / 180, targetPhi * float(PI) / float(180));
-		
-
-		// only start moving forward when "done" turning
-		if(abs(motorDif) < 20) {
-
-			//
-			if(firstRho) { // To mitigate the initial encoder readings from turning
-
-				rhoOffset = RADIUS*RAD_CONVERSION*float(counts.L + counts.R)*float(0.5);
-				firstRho = false;
-			}
-
-			// Calculate Va (forward motor output)
-			motorSum = controlForward(currentDistance, targetRho);
-		}
+		motorSum = controlForward(currentDistance, targetRho);
+		motorDif = controlAngle(-turnAngle * PI / 180, targetPhi * PI / 180);
+		setMotors(motorDif, motorSum);
 	}
-	// Determine target motor speeds based on motorDif and motorSum using setMotors()
-	// Serial.print("Dif: ");
-	// Serial.print(motorDif);
-	// Serial.print("\t");
-	// // Serial.print("Sum: ");
-	// // Serial.print(motorSum);
-	// // Serial.print("\t");
-	// Serial.print("L: ");
-	// Serial.print(counts.L);
-	// Serial.print("\t");
-	// Serial.print("R: ");
-	// Serial.print(counts.R);
-	// Serial.print("\t");
-	// Serial.print("Angle: ");
-	// Serial.print(currentAngle * 180 / PI);
-	// Serial.print("\t");
-	// Serial.print("Distance: ");
-	// Serial.println(currentDistance);
-
-	// print the error 
-	// Serial.print("Error: ");
-	// Serial.println(error);
 	
-
-	setMotors(motorDif, motorSum);
-	//targetSpeed = {0,0}; //TODO remove this
-	// Set the motors to the new speeds
 	motors.setSpeeds(targetSpeed.L, targetSpeed.R);
-
-	if(isDone()) {
-		stopControl(); // Clean up locals
-		return true;
-	}
-
-	return false;
 }
 
-void Control::startControl() {
-
-	// Guard clause
-	if(driveStarted) return;
-	else driveStarted = true;
+void VelocityControl::startControl() {
 
 	sensorSetup();
  	delay(500);
   	sensorReset();
 
-	// Reset flags
-	firstRho = true;
-
 	// Reset driving variables
 	rhoOffset = 0;
 	motorDif = 0;
 	motorSum = 0;
-	error = 0, pastErrorRho = 0, pastErrorPhi = 0;
+	angleError = 0, distanceError = 0, pastErrorRho = 0, pastErrorPhi = 0;
 	I_rho = 0, I_phi = 0;
 
 	// Save current time
@@ -133,54 +75,55 @@ void Control::startControl() {
 /**
  * Reset controller when finished
  */
-void Control::stopControl() {
+void VelocityControl::stopControl() {
 
 	// Reset encoders
 	encoders.getCountsAndResetRight();
 	encoders.getCountsAndResetLeft();
+	
+	// Reset IMU
+	sensorReset();
+
+	motorDif = 0;
+	motorSum = 0;
+	angleError = 0, distanceError = 0, pastErrorRho = 0, pastErrorPhi = 0;
+	I_rho = 0, I_phi = 0;
 
 	// Set left and right motor speeds to 0
 	motors.setSpeeds(0, 0);
 
-} // End
+} 
 
 /**
  * Read current encoder counts and calculate currentAngle and currentDistance
  */
-void Control::getPositions() {
+void VelocityControl::getPositions() {
 	// Update encoder counts
 	counts = {encoders.getCountsLeft(), encoders.getCountsRight()};
 
 	// Find current robot positions
-	currentAngle = (RADIUS * RAD_CONVERSION * float(counts.L - counts.R)) / BASE;
+	// currentAngle = (RADIUS * RAD_CONVERSION * float(counts.L - counts.R)) / BASE;
 	currentDistance = RADIUS * RAD_CONVERSION * float(counts.L + counts.R) * float(0.5); // Circumference = 2*PI*r
 
 }
 
-float Control::controlForward(float current, float desired) {
+float VelocityControl::controlForward(float current, float desired) {
 
 	float P = 0, D = 0, output = 0;
 
 	// Calculate error
-	error = desired - current;
+	distanceError = desired - current;
 
 	// Calculate P component
-	P = KP_RHO * error;
+	P = KP_RHO * distanceError;
 
 	// Calculate I component
-	if(error > 1 || error < -1) {
-		I_rho = 0;
-	} else {
-		I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
-
-	}
-
-	// I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+	I_rho += KI_RHO * float(CONTROL_SAMPLE_RATE / 1000.0) * distanceError;
 
 	// Calculate D component
 	if (currentTime > 0) {
-		D = (error - pastErrorRho) / float(CONTROL_SAMPLE_RATE / 1000.0);
-		pastErrorRho = error;
+		D = (distanceError - pastErrorRho) / float(CONTROL_SAMPLE_RATE / 1000.0);
+		pastErrorRho = distanceError;
 		D *= KD_RHO;
 	} else D = 0;
 
@@ -191,71 +134,50 @@ float Control::controlForward(float current, float desired) {
 	if(output > 400) output = 400;
 	if(output < -400) output = -400;
 
-	// Make sure the output is large enough for the motors to turn
-	// if(error > 0.5 && output < 60) output = 60;
-	// else if(error < -0.5 && output > -60) output = -60;
-
-	// Print current values for testing
-	// Serial.print("\trho: "); Serial.print(current,5);
-	// Serial.print("\ttargetRho: "); Serial.print(desired);
-	// Serial.print("\terror: "); Serial.print(error,5);
-	// Serial.print("\tP: "); Serial.print(P);
-	// Serial.print("\tI: "); Serial.print(I_phi);
-	// Serial.print("\tD: "); Serial.print(D);
-	// Serial.print("\tSum: "); Serial.println(output);
 	return output;
 }
 
-float Control::controlAngle(float current, float desired) {
+float VelocityControl::controlAngle(float current, float desired) {
 
 	float P = 0, D = 0, output = 0;
+	
 	// Calculate error
-	error = desired - current;
+	angleError = desired - current;
+	
 	// Calculate P component
-	P = KP_PHI * error;
+	P = KP_PHI * angleError;
+	
 	// Calculate I component
-	if(error > 90*(PI/180) || error < -90*(PI/180)) {
+	if(angleError > 90*(PI/180) || angleError < -90*(PI/180)) {
 		I_phi = 0;
 	} else {
-		I_phi += KI_PHI * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
+		I_phi += KI_PHI * float(CONTROL_SAMPLE_RATE / 1000.0) * angleError;
 	}
 
 	// Calculate D component
 	if (currentTime > 0) {
-		D = (error - pastErrorPhi) / float(CONTROL_SAMPLE_RATE / 1000.0);
-		pastErrorPhi = error;
+		D = (angleError - pastErrorPhi) / float(CONTROL_SAMPLE_RATE / 1000.0);
+		pastErrorPhi = angleError;
 		D *= KD_PHI;
 	} else D = 0;
+
 	// Calculate controller output
 	output = P + I_phi + D;
+	
 	// Make sure the output is within [0, 400]
 	if(output > 400) output = 400;
 	else if(output < -400) output = -400;
 
-	// if(error > 0.1 && output < 60) output = 60;
-	// else if(error < -0.1 && output > -60) output = -60;
-
-	// Print current values for testing
-	// Serial.print("currentAngle: "); Serial.print(current*180/PI,5);
-	// Serial.print("\ttargetPhi: "); Serial.print(desired*180/PI);
-	// Serial.print("\terror: "); Serial.print(error,5);
-	// Serial.print("\tP: "); Serial.print(P);
-	// Serial.print("\tI: "); Serial.print(I_phi);
-	// Serial.print("\tD: "); Serial.print(D);
-	// Serial.print("\tnewDif: "); Serial.println(output);
-
-	if(abs(error)*180/PI < 1) {
+	// If the angle error is less than 1 degree, stop the motors
+	if(abs(angleError)*180/PI < 1) {
 		output = 0;
 	}
 
 	return output;
 }
 
-void Control::setMotors(float diff, float sum) const {
+void VelocityControl::setMotors(float diff, float sum) const {
 	Pair<float> target = {0,0}; 		//!< Motor PWM outputs
-	// sum: A value between -400 and 400 describing the voltage sum applied to left and right motors
-	// (Voltage of left motor + voltage of right motor = sum. sum = -400 = full reverse, sum = 400 = full forward)
-	// diff: A decimal value between 0 and 400 describing the proportional difference in voltages applied to left nd right motors (controls rotation, higher value =
 
 	target.R = (sum - diff) / float(2.0);
 	target.L = (sum + diff) / float(2.0);
@@ -270,7 +192,7 @@ void Control::setMotors(float diff, float sum) const {
 	targetSpeed = {int(target.L),int(target.R)};
 }
 
-bool Control::isDone() {
+bool VelocityControl::isDone() {
 	bool done = false;
 	// If the errors are low enough for long enough, return true
 
@@ -292,7 +214,7 @@ bool Control::isDone() {
 	return done;
 }
 
-bool Control::isDoneRotating() {
+bool VelocityControl::isDoneRotating() {
 	bool done = false;
 	// If the errors are low enough for long enough, return true
 
@@ -314,14 +236,14 @@ bool Control::isDoneRotating() {
 	return done;
 }
 
-void Control::sensorReset() {
+void VelocityControl::sensorReset() {
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
 
 // Read the gyro and update the angle.  This should be called as
 // frequently as possible while using the gyro to do turns.
-void Control::sensorUpdate()
+void VelocityControl::sensorUpdate()
 {
   // Read the measurements from the gyro.
   imu.readGyro();
@@ -356,7 +278,7 @@ still.
 The digital zero-rate level of the gyro can be as high as
 25 degrees per second, and this calibration helps us correct for
 that. */
-void Control::sensorSetup() {
+void VelocityControl::sensorSetup() {
   Wire.begin();
   imu.init();
   imu.enableDefault();
