@@ -125,12 +125,12 @@ void turnSensorSetup()
   // user presses A.
   display.clear();
   turnSensorReset();
-  while (!buttonA.getSingleDebouncedRelease())
-  {
-    turnSensorUpdate();
-    display.gotoXY(0, 0);
-    Serial.println((((int32_t)turnAngle >> 16) * 360) >> 16);
-    display.print(F("   "));
-  }
+  // while (!buttonA.getSingleDebouncedRelease())
+  // {
+  //   turnSensorUpdate();
+  //   display.gotoXY(0, 0);
+  //   Serial.println((((int32_t)turnAngle >> 16) * 360) >> 16);
+  //   display.print(F("   "));
+  // }
   display.clear();
 }

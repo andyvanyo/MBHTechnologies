@@ -2,13 +2,15 @@
 // Created by Alex Curtis on 10/12/22.
 //
 #include <Arduino.h>
+#include <Zumo32U4.h>
 #include "Zumo32U4Encoders.h"
 #include "Zumo32U4Motors.h"
+#include "Zumo32U4IMU.h"
 #ifndef Control_h
 #define Control_h
 
 
-
+	
 
 template<typename T>
 struct Pair {
@@ -52,8 +54,13 @@ public:
 
 	// Status
 	bool isDone();
+	bool isDoneRotating();
 
-	// helpers
+    void sensorSetup();
+	void sensorUpdate();
+	void sensorReset();
+
+    // helpers
 	void getPositions();
 	void setMotors(float diff, float sum) const;
 

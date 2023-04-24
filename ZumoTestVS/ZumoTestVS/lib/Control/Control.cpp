@@ -4,13 +4,27 @@
 
 #include "Control.h"
 #include "Arduino.h"
+#include <Wire.h>
 
 #define ENCODER_OPTIMIZE_INTERRUPTS
 Pair<int> targetSpeed;              //!< Scaled PWM values given to motors.setSpeeds() each ranging from -400 to 400
 Pair<long> counts, pastCounts;      //!< Left and right encoder readings (counts)
 Zumo32U4Motors motors;        //!< Motor 2 is the right wheel
 Zumo32U4Encoders encoders;    //!< Encoders for left and right wheels
+Zumo32U4IMU imu;
+float turnAngle = 0;
 
+	// turnRate is the current angular rate of the gyro, in units of
+	// 0.07 degrees per second.
+	int16_t turnRate = 0;
+
+	// This is the average reading obtained from the gyro's Z axis
+	// during calibration.
+	int16_t gyroOffset = 0;
+
+	// This variable helps us keep track of how much time has passed
+	// between readings of the gyro.
+	uint16_t gyroLastUpdate = 0;
 
 Control::Control() {
 
@@ -23,6 +37,8 @@ bool Control::drive(float targetPhi, float targetRho) {
 
 	// Find current robot positions
 	getPositions();
+	
+	sensorUpdate();
 
 	// Update motorDif and motorSum with control() every CONTROL_SAMPLE_RATE ms
 	if (millis()-startTime >= currentTime + CONTROL_SAMPLE_RATE) {
@@ -31,7 +47,8 @@ bool Control::drive(float targetPhi, float targetRho) {
 		currentTime += CONTROL_SAMPLE_RATE;
 
 		// Calculate ∆Va (rotational motor output)
-		motorDif = controlAngle(currentAngle, targetPhi * float(PI) / float(180));
+		motorDif = controlAngle(-turnAngle * PI / 180, targetPhi * float(PI) / float(180));
+		
 
 		// only start moving forward when "done" turning
 		if(abs(motorDif) < 20) {
@@ -51,20 +68,20 @@ bool Control::drive(float targetPhi, float targetRho) {
 	// Serial.print("Dif: ");
 	// Serial.print(motorDif);
 	// Serial.print("\t");
-	// Serial.print("Sum: ");
-	// Serial.print(motorSum);
+	// // Serial.print("Sum: ");
+	// // Serial.print(motorSum);
+	// // Serial.print("\t");
+	// Serial.print("L: ");
+	// Serial.print(counts.L);
 	// Serial.print("\t");
-	Serial.print("L: ");
-	Serial.print(counts.L);
-	Serial.print("\t");
-	Serial.print("R: ");
-	Serial.print(counts.R);
-	Serial.print("\t");
-	Serial.print("Angle: ");
-	Serial.print(currentAngle * 180 / PI);
-	Serial.print("\t");
-	Serial.print("Distance: ");
-	Serial.println(currentDistance);
+	// Serial.print("R: ");
+	// Serial.print(counts.R);
+	// Serial.print("\t");
+	// Serial.print("Angle: ");
+	// Serial.print(currentAngle * 180 / PI);
+	// Serial.print("\t");
+	// Serial.print("Distance: ");
+	// Serial.println(currentDistance);
 
 	// print the error 
 	// Serial.print("Error: ");
@@ -89,6 +106,10 @@ void Control::startControl() {
 	// Guard clause
 	if(driveStarted) return;
 	else driveStarted = true;
+
+	sensorSetup();
+ 	delay(500);
+  	sensorReset();
 
 	// Reset flags
 	firstRho = true;
@@ -193,7 +214,7 @@ float Control::controlAngle(float current, float desired) {
 	// Calculate P component
 	P = KP_PHI * error;
 	// Calculate I component
-	if(error > 30*(PI/180) || error < -30*(PI/180)) {
+	if(error > 90*(PI/180) || error < -90*(PI/180)) {
 		I_phi = 0;
 	} else {
 		I_phi += KI_PHI * float(CONTROL_SAMPLE_RATE / 1000.0) * error;
@@ -215,13 +236,17 @@ float Control::controlAngle(float current, float desired) {
 	// else if(error < -0.1 && output > -60) output = -60;
 
 	// Print current values for testing
-	// Serial.print("currentAngle: "); Serial.print(current*180/PI,5);
-	// Serial.print("\ttargetPhi: "); Serial.print(desired*180/PI);
-	// Serial.print("\terror: "); Serial.print(error,5);
-	// //Serial.print("\tP: "); Serial.print(P);
-	// //Serial.print("\tI: "); Serial.print(I_phi);
-	// //Serial.print("\tD: "); Serial.print(D);
-	// Serial.print("\tnewDif: "); Serial.println(output);
+	Serial.print("currentAngle: "); Serial.print(current*180/PI,5);
+	Serial.print("\ttargetPhi: "); Serial.print(desired*180/PI);
+	Serial.print("\terror: "); Serial.print(error,5);
+	Serial.print("\tP: "); Serial.print(P);
+	Serial.print("\tI: "); Serial.print(I_phi);
+	Serial.print("\tD: "); Serial.print(D);
+	Serial.print("\tnewDif: "); Serial.println(output);
+
+	if(abs(error)*180/PI < 1) {
+		output = 0;
+	}
 
 	return output;
 }
@@ -267,3 +292,95 @@ bool Control::isDone() {
 	return done;
 }
 
+bool Control::isDoneRotating() {
+	bool done = false;
+	// If the errors are low enough for long enough, return true
+
+	// Every MIN_SETTLING_TIME milliseconds
+	if (millis()-startTime >= lastTime + 1000) {
+
+		lastTime += 1000;
+
+		// If the encoders haven't changed
+		if(counts.L == pastCounts.L && counts.R == pastCounts.R) {
+			// The robot is done moving, or isn't moving fast enough for us to wait.
+			done = true;
+		}
+
+		// Save position
+		pastCounts = counts;
+	}
+
+	return done;
+}
+
+void Control::sensorReset() {
+  gyroLastUpdate = micros();
+  turnAngle = 0;
+}
+
+// Read the gyro and update the angle.  This should be called as
+// frequently as possible while using the gyro to do turns.
+void Control::sensorUpdate()
+{
+  // Read the measurements from the gyro.
+  imu.readGyro();
+  turnRate = imu.g.z - gyroOffset;
+
+  // Figure out how much time has passed since the last update (dt)
+  uint16_t m = micros();
+  uint16_t dt = m - gyroLastUpdate;
+  gyroLastUpdate = m;
+
+  // Multiply dt by turnRate in order to get an estimation of how
+  // much the robot has turned since the last update.
+  // (angular change = angular velocity * time)
+  int32_t d = (int32_t)turnRate * dt;
+
+  // The units of d are gyro digits times microseconds.  We need
+  // to convert those to the units of turnAngle, where 2^29 units
+  // represents 45 degrees.  The conversion from gyro digits to
+  // degrees per second (dps) is determined by the sensitivity of
+  // the gyro: 0.07 degrees per second per digit.
+  //
+  // (0.07 dps/digit) * (1/1000000 s/us) * (2^29/45 unit/degree)
+  // = 14680064/17578125 unit/(digit*us)
+  turnAngle += ((float)imu.g.z - gyroOffset) * 70 * dt / 1000000000;
+}
+
+/* This should be called in setup() to enable and calibrate the
+gyro.  It uses the display, yellow LED, and button A.  While the
+display shows "Gyro cal", you should be careful to hold the robot
+still.
+
+The digital zero-rate level of the gyro can be as high as
+25 degrees per second, and this calibration helps us correct for
+that. */
+void Control::sensorSetup() {
+  Wire.begin();
+  imu.init();
+  imu.enableDefault();
+  imu.configureForTurnSensing();
+
+  // Turn on the yellow LED in case the display is not available.
+  ledYellow(1);
+
+  // Delay to give the user time to remove their finger.
+  delay(500);
+
+  // Calibrate the gyro.
+  int32_t total = 0;
+  for (uint16_t i = 0; i < 1024; i++)
+  {
+    // Wait for new data to be available, then read it.
+    while(!imu.gyroDataReady()) {}
+    imu.readGyro();
+
+    // Add the Z axis reading to the total.
+    total += imu.g.z;
+  }
+  ledYellow(0);
+  gyroOffset = total / 1024;
+
+  sensorReset();
+}
