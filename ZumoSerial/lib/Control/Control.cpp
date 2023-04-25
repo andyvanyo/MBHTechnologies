@@ -60,6 +60,7 @@ void VelocityControl::startControl() {
 	motorSum = 0;
 	angleError = 0, distanceError = 0, pastErrorRho = 0, pastErrorPhi = 0;
 	I_rho = 0, I_phi = 0;
+	counts = {0,0};
 
 	// Save current time
 	currentTime = millis();

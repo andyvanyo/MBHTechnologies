@@ -39,8 +39,8 @@ void parseSerial() {
 			newPhi += 10;
 		}
 		else if(receivedChar == 'x') {
-			newPhi = 0;	
 			newRho = 0;
+			newPhi = 0;
 			control.stopControl();
 		}
 		newData = false;
@@ -52,7 +52,7 @@ void setup() {
 	Serial.begin(9600);
 	while(!Serial); // Wait for serial connection
 	control.startControl();
-	Serial.println("<Zumo is ready>");
+	// Serial.println("<Zumo is ready>");
 	printStartTime = millis();
 	Motors.setSpeeds(0, 0);
 }
@@ -60,19 +60,24 @@ void setup() {
 void loop() {
 	readChar();
 	parseSerial();
-
-	control.drive(newPhi, newRho);
-	
 	if (millis()-printStartTime >= printTime + PRINT_INTERVAL) {
 
 		// Adjust elapsed time
 		printTime += PRINT_INTERVAL;
 
-		Serial.print("angle error (deg): ");
+		Serial.print("angleE: ");
 		Serial.print(control.angleError*180/PI);
 		Serial.print("\t");
-		Serial.print("distance error (in): ");
+		Serial.print("targetRho: ");
+		Serial.print(newRho);
+		Serial.print("\t");
+		Serial.print("currentRho: ");
+		Serial.print(control.currentDistance);
+		Serial.print("\t");
+		Serial.print("rhoE: ");
 		Serial.println(control.distanceError);
 	}
+
+	control.drive(newPhi, newRho);
 }
 
