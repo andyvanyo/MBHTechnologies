@@ -45,15 +45,10 @@ void parseSerial() {
 		}
 		newData = false;
 		Serial.println("Received");
-		// control.stopControl();
 	}
-	
-
-	
 }
 
 void setup() {
-	// Begin serial communication
 	Serial.begin(9600);
 	while(!Serial); // Wait for serial connection
 	control.startControl();
@@ -73,20 +68,11 @@ void loop() {
 		// Adjust elapsed time
 		printTime += PRINT_INTERVAL;
 
-		Serial.print("angleE: ");
+		Serial.print("angle error (deg): ");
 		Serial.print(control.angleError*180/PI);
 		Serial.print("\t");
-		Serial.print("targetRho: ");
-		Serial.print(newRho);
-		Serial.print("\t");
-		Serial.print("currentRho: ");
-		Serial.print(control.currentDistance);
-		Serial.print("\t");
-		Serial.print("rhoE: ");
+		Serial.print("distance error (in): ");
 		Serial.println(control.distanceError);
 	}
-
-	
-	
 }
 

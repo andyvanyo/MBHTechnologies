@@ -26,9 +26,7 @@ float turnAngle = 0;
 	// between readings of the gyro.
 	uint16_t gyroLastUpdate = 0;
 
-VelocityControl::VelocityControl() {
-
-}
+VelocityControl::VelocityControl() {}
 
 void VelocityControl::drive(float targetPhi, float targetRho) {
 
