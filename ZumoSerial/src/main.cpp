@@ -6,7 +6,7 @@
 volatile float newRho = 0, newPhi = 0;
 int sum = 0;
 int diff = 0;
-bool done = false;
+bool fineControl = false;
 
 void readChar();
 void parseSerial();
@@ -19,26 +19,32 @@ long printTime = 0;
 VelocityControl control;
 Zumo32U4Motors Motors;
 
-//!< Reads a byte sent over serial from Matlab
 void readChar() {
 	if (Serial.available() > 0) {
 		receivedChar = Serial.read();
 		newData = true;
 	}
 }
+volatile float rhoIncrement = 2;
+volatile float phiIncrement = 45;
 
 void parseSerial() {
 	if(newData) {
-		if(receivedChar == 'w') {
-			newRho += 5;
+		if(receivedChar == 'f') {
+			rhoIncrement = 1;
+			phiIncrement = 10;
+		} else if(receivedChar == 'r') {
+			rhoIncrement = 2;
+			phiIncrement = 45;
+		} else if(receivedChar == 'w') {
+			newRho += rhoIncrement;
 		} else if(receivedChar == 's') {
-			newRho -= 5;
+			newRho -= rhoIncrement;
 		} else if(receivedChar == 'a') {
-			newPhi -= 10;
+			newPhi -= phiIncrement;
 		} else if(receivedChar == 'd') {
-			newPhi += 10;
-		}
-		else if(receivedChar == 'x') {
+			newPhi += phiIncrement;
+		} else if(receivedChar == 'x') {
 			newRho = 0;
 			newPhi = 0;
 			control.stopControl();
@@ -57,9 +63,14 @@ void setup() {
 	Motors.setSpeeds(0, 0);
 }
 
+
+
 void loop() {
 	readChar();
 	parseSerial();
+
+	control.drive(newPhi, newRho);
+	
 	if (millis()-printStartTime >= printTime + PRINT_INTERVAL) {
 
 		// Adjust elapsed time
@@ -78,6 +89,6 @@ void loop() {
 		Serial.println(control.distanceError);
 	}
 
-	control.drive(newPhi, newRho);
+	
 }
 

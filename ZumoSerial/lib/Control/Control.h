@@ -36,7 +36,7 @@ public:
 	const float RAD_CONVERSION = float(2.0 * PI) / CPR;     //!< Scalar to convert counts to radians
 
 	// public variables
-	const float KP_RHO = 50, KI_RHO = 20, KD_RHO = 0.000000; //!< Rho controller constants
+	const float KP_RHO = 100, KI_RHO = 30, KD_RHO = 0.000000; //!< Rho controller constants
 	const float KP_PHI = 200, KI_PHI = 80, KD_PHI = 0.000000; //!< Phi controller constants
 	float currentDistance = 0;                           //!< current and target distances in inches
 	float currentAngle = 0;                           //!< current and target angles in radians
